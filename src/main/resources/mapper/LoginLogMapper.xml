@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.example.amorauth.mapper.LoginLogMapper">
+
+    <resultMap id="LoginLogResultMap" type="org.example.amorauth.entity.LoginLog">
+        <id column="id" property="id"/>
+        <result column="user_id" property="userId"/>
+        <result column="login_time" property="loginTime"/>
+        <result column="ip_address" property="ipAddress"/>
+        <result column="user_agent" property="userAgent"/>
+        <result column="login_type" property="loginType"/>
+        <result column="success" property="success"/>
+        <result column="error_message" property="errorMessage"/>
+    </resultMap>
+
+    <resultMap id="LoginLogDtoResultMap" type="org.example.amorauth.dto.LoginLogDto">
+        <id column="id" property="id"/>
+        <result column="user_id" property="userId"/>
+        <result column="login_time" property="loginTime"/>
+        <result column="ip_address" property="ipAddress"/>
+        <result column="user_agent" property="userAgent"/>
+        <result column="login_type" property="loginType"/>
+        <result column="success" property="success"/>
+        <result column="error_message" property="errorMessage"/>
+        <result column="user_name" property="userName"/>
+        <result column="user_email" property="userEmail"/>
+    </resultMap>
+
+    <insert id="insertLoginLog" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO login_logs (user_id, login_time, ip_address, user_agent, login_type, success, error_message)
+        VALUES (#{userId}, #{loginTime}, #{ipAddress}, #{userAgent}, #{loginType}, #{success}, #{errorMessage})
+    </insert>
+
+    <select id="findByUserId" resultMap="LoginLogDtoResultMap">
+        SELECT
+            ll.id, ll.user_id, ll.login_time, ll.ip_address, ll.user_agent,
+            ll.login_type, ll.success, ll.error_message,
+            u.name as user_name, u.email as user_email
+        FROM login_logs ll
+        LEFT JOIN users u ON ll.user_id = u.id
+        WHERE ll.user_id = #{userId}
+        ORDER BY ll.login_time DESC
+        <if test="limit != null">
+            LIMIT #{limit}
+        </if>
+    </select>
+
+    <select id="findRecentLogs" resultMap="LoginLogDtoResultMap">
+        SELECT
+            ll.id, ll.user_id, ll.login_time, ll.ip_address, ll.user_agent,
+            ll.login_type, ll.success, ll.error_message,
+            u.name as user_name, u.email as user_email
+        FROM login_logs ll
+        LEFT JOIN users u ON ll.user_id = u.id
+        ORDER BY ll.login_time DESC
+        <if test="limit != null">
+            LIMIT #{limit}
+        </if>
+    </select>
+
+    <select id="countByUserId" resultType="long">
+        SELECT COUNT(*) FROM login_logs WHERE user_id = #{userId}
+    </select>
+
+    <select id="findLatestByUserId" resultMap="LoginLogResultMap">
+        SELECT * FROM login_logs
+        WHERE user_id = #{userId}
+        ORDER BY login_time DESC
+        LIMIT 1
+    </select>
+
+</mapper>
