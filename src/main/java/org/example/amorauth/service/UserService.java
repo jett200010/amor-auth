@@ -20,13 +20,27 @@ public class UserService {
     private final RedisTemplate<String, Object> redisTemplate;
 
     public User processOAuth2User(OAuth2User oauth2User) {
+        // 详细记录接收到的用户属性
+        log.info("Processing OAuth2User with attributes: {}", oauth2User.getAttributes());
+
         String googleId = oauth2User.getAttribute("sub");
         String email = oauth2User.getAttribute("email");
         String name = oauth2User.getAttribute("name");
         String picture = oauth2User.getAttribute("picture");
         String locale = oauth2User.getAttribute("locale");
 
-        log.info("Processing OAuth2 user: googleId={}, email={}", googleId, email);
+        // 验证必要的属性
+        if (googleId == null || googleId.trim().isEmpty()) {
+            log.error("Google ID (sub) is null or empty. OAuth2User attributes: {}", oauth2User.getAttributes());
+            throw new IllegalArgumentException("Google user ID (sub) cannot be null or empty");
+        }
+
+        if (email == null || email.trim().isEmpty()) {
+            log.error("Email is null or empty for Google ID: {}. OAuth2User attributes: {}", googleId, oauth2User.getAttributes());
+            throw new IllegalArgumentException("Google user email cannot be null or empty");
+        }
+
+        log.info("Processing OAuth2 user: googleId={}, email={}, name={}", googleId, email, name);
 
         // 首先尝试通过Google ID查找用户
         User existingUser = userMapper.findByGoogleId(googleId);
@@ -36,6 +50,7 @@ public class UserService {
             existingUser.setName(name);
             existingUser.setPicture(picture);
             existingUser.setLocale(locale);
+            existingUser.setLastLoginAt(LocalDateTime.now());
             existingUser.setUpdatedAt(LocalDateTime.now());
             userMapper.updateUser(existingUser);
 
@@ -49,11 +64,12 @@ public class UserService {
             User newUser = new User();
             newUser.setGoogleId(googleId);
             newUser.setEmail(email);
-            newUser.setName(name);
+            newUser.setName(name != null ? name : email); // 如果name为空，使用email作为fallback
             newUser.setPicture(picture);
             newUser.setLocale(locale);
             newUser.setCreatedAt(LocalDateTime.now());
             newUser.setUpdatedAt(LocalDateTime.now());
+            newUser.setLastLoginAt(LocalDateTime.now());
 
             userMapper.insertUser(newUser);
 

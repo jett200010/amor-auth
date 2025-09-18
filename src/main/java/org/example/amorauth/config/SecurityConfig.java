@@ -10,13 +10,10 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.oauth2.client.endpoint.OAuth2AccessTokenResponseClient;
 import org.springframework.security.oauth2.client.endpoint.OAuth2AuthorizationCodeGrantRequest;
-import org.springframework.security.oauth2.client.userinfo.DefaultOAuth2UserService;
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest;
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserService;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.SecurityFilterChain;
-
-import jakarta.servlet.http.HttpServletRequest;
 
 @Configuration
 @EnableWebSecurity
@@ -27,12 +24,15 @@ public class SecurityConfig {
     private final UserService userService;
     private final LoginLogService loginLogService;
     private final OAuth2AccessTokenResponseClient<OAuth2AuthorizationCodeGrantRequest> authorizationCodeTokenResponseClient;
+    private final OAuth2UserService<OAuth2UserRequest, OAuth2User> oauth2UserService;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
             .authorizeHttpRequests(authz -> authz
-                .requestMatchers("/", "/api/auth/login", "/oauth2/**", "/login/oauth2/**", "/api/auth/google/callback", "/error", "/api/auth/network/test").permitAll()
+                .requestMatchers("/", "/api/auth/login", "/oauth2/**", "/login/oauth2/**",
+                    "/api/auth/google/callback", "/error", "/api/auth/network/test",
+                    "/api/google/**","/session/*").permitAll()
                 .anyRequest().authenticated()
             )
             .oauth2Login(oauth2 -> oauth2
@@ -43,7 +43,7 @@ public class SecurityConfig {
                     .accessTokenResponseClient(authorizationCodeTokenResponseClient)
                 )
                 .userInfoEndpoint(userInfo -> userInfo
-                    .userService(oAuth2UserService())
+                    .userService(oauth2UserService)
                 )
                 .successHandler((request, response, authentication) -> {
                     log.info("OAuth2 login success for user: {}", authentication.getName());
@@ -82,30 +82,5 @@ public class SecurityConfig {
             );
 
         return http.build();
-    }
-
-    @Bean
-    public OAuth2UserService<OAuth2UserRequest, OAuth2User> oAuth2UserService() {
-        DefaultOAuth2UserService delegate = new DefaultOAuth2UserService();
-
-        return request -> {
-            log.info("Processing OAuth2 user request for client: {}", request.getClientRegistration().getClientId());
-            log.debug("Token endpoint: {}", request.getClientRegistration().getProviderDetails().getTokenUri());
-            log.debug("Access token: {}", request.getAccessToken().getTokenValue().substring(0, 10) + "...");
-
-            try {
-                OAuth2User oauth2User = delegate.loadUser(request);
-                String email = oauth2User.getAttribute("email");
-                log.info("Successfully loaded OAuth2 user: {}", email);
-
-                // 处理用户信息并保存到数据库
-                userService.processOAuth2User(oauth2User);
-
-                return oauth2User;
-            } catch (Exception e) {
-                log.error("Failed to load OAuth2 user", e);
-                throw e;
-            }
-        };
     }
 }
