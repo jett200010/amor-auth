@@ -13,8 +13,5 @@ public class User {
     private String locale;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-
-    public void setLastLoginAt(LocalDateTime now) {
-
-    }
+    private LocalDateTime lastLoginAt;
 }

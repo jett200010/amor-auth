@@ -2,6 +2,7 @@ package org.example.amorauth.config;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.example.amorauth.entity.User;
 import org.example.amorauth.service.LoginLogService;
 import org.example.amorauth.service.UserService;
 import org.springframework.context.annotation.Bean;
@@ -29,12 +30,10 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-            .authorizeHttpRequests(authz -> authz
-                .requestMatchers("/", "/api/auth/login", "/oauth2/**", "/login/oauth2/**",
-                    "/api/auth/google/callback", "/error", "/api/auth/network/test",
-                    "/api/google/**","/session/*").permitAll()
-                .anyRequest().authenticated()
-            )
+                .authorizeHttpRequests(authz -> authz
+                        .requestMatchers("/", "/api/**").permitAll()
+                        .anyRequest().authenticated()
+                )
             .oauth2Login(oauth2 -> oauth2
                 .redirectionEndpoint(redirection -> redirection
                     .baseUri("/api/auth/google/callback")
@@ -50,7 +49,7 @@ public class SecurityConfig {
 
                     // OAuth2登录成功后的处理
                     OAuth2User oauth2User = (OAuth2User) authentication.getPrincipal();
-                    var user = userService.processOAuth2User(oauth2User);
+                    User user = userService.processOAuth2User(oauth2User);
 
                     // 记录成功登录日志
                     loginLogService.recordLogin(user, request, true, null);

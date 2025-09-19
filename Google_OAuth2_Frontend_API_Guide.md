@@ -1,386 +1,348 @@
-# Google OAuth2 登录 - 前端调用指南
+# Google OAuth2 登录登出 API 接口文档
 
-## API 接口概览
+## 概述
+本文档描述了Google OAuth2登录系统的前端调用接口，包括登录、登出、Session管理等功能。
 
-基础URL: `http://localhost:8080`
+## 基础信息
+- 服务器地址: `http://localhost:8080`
+- 所有接口返回JSON格式数据
+- 错误时HTTP状态码为4xx或5xx
 
-### 1. 获取Google登录URL
-**接口**: `GET /api/google/login-url`
-**描述**: 获取Google OAuth2登录链接
-**返回**:
+## 1. 登录相关接口
+
+### 1.1 获取登录信息
+```
+GET /api/auth/login
+```
+**响应示例:**
 ```json
 {
-  "success": true,
-  "loginUrl": "/oauth2/authorization/google",
-  "message": "请使用此URL进行Google登录",
-  "clientId": "your-google-client-id"
+  "message": "请通过Google账户登录",
+  "googleLoginUrl": "/oauth2/authorization/google"
 }
 ```
 
-### 2. 直接跳转到Google登录
-**接口**: `GET /api/google/login`
-**描述**: 直接重定向到Google登录页面
+### 1.2 开始Google OAuth2登录
+```
+GET /oauth2/authorization/google
+```
+**说明:** 
+- 前端重定向到此URL开始Google登录流程
+- 用户完成Google授权后会自动回调到callback接口
 
-### 3. Google登录回调处理
-**接口**: `GET /api/google/callback`
-**描述**: Google OAuth2回调地址（配置在Google Console中）
-**返回**:
+### 1.3 Google登录回调处理
+```
+GET /api/auth/google/callback
+```
+**响应示例:**
 ```json
 {
   "success": true,
-  "message": "Google登录成功",
+  "message": "登录成功",
   "user": {
     "id": 1,
     "email": "user@gmail.com",
-    "name": "用户名",
-    "picture": "头像URL",
-    "googleId": "google-user-id"
+    "name": "User Name",
+    "googleId": "12345678",
+    "picture": "https://lh3.googleusercontent.com/...",
+    "createdAt": "2025-01-01T00:00:00"
   },
-  "token": "jwt_token_for_user_1"
+  "redirectUrl": "/dashboard"
 }
 ```
 
-### 4. 获取当前用户信息
-**接口**: `GET /api/google/user-info`
-**描述**: 获取当前登录用户的详细信息
-**返回**:
+### 1.4 获取当前用户信息
+```
+GET /api/auth/user
+```
+**响应示例:**
 ```json
 {
-  "success": true,
   "user": {
     "id": 1,
     "email": "user@gmail.com",
-    "name": "用户名",
-    "picture": "头像URL",
-    "googleId": "google-user-id",
-    "createdAt": "2023-01-01T00:00:00",
-    "lastLoginAt": "2023-01-01T00:00:00"
-  }
+    "name": "User Name",
+    "googleId": "12345678",
+    "picture": "https://lh3.googleusercontent.com/..."
+  },
+  "authenticated": true
 }
 ```
 
-### 5. 检查登录状态
-**接口**: `GET /api/google/status`
-**描述**: 检查用户是否已登录
-**返回**:
+### 1.5 获取登录状态
+```
+GET /api/auth/status
+```
+**响应示例:**
 ```json
 {
-  "isLoggedIn": true,
-  "email": "user@gmail.com",
-  "name": "用户名"
+  "authenticated": true,
+  "user": {
+    "email": "user@gmail.com",
+    "name": "User Name",
+    "sub": "12345678"
+  },
+  "hasSession": true,
+  "sessionId": "ABC123..."
 }
 ```
 
-### 6. 登出
-**接口**: `POST /api/google/logout`
-**描述**: 用户登出
-**返回**:
+## 2. 登出相关接口
+
+### 2.1 标准登出 ⭐ 推荐
+```
+POST /api/auth/logout
+```
+**说明:** 清理用户Session和安全上下文
+**响应示例:**
 ```json
 {
   "success": true,
-  "message": "登出成功"
+  "message": "登出成功",
+  "user": "user@gmail.com",
+  "timestamp": 1642857600000
 }
 ```
 
-## 前端实现示例
+### 2.2 强制登出（清理所有Session）
+```
+POST /api/auth/force-logout
+```
+**说明:** 清理所有Redis中的Session数据，用于解决Session异常
+**响应示例:**
+```json
+{
+  "success": true,
+  "message": "强制登出成功，所有Session已清理",
+  "timestamp": 1642857600000
+}
+```
 
-### JavaScript/TypeScript 实现
+## 3. Session管理接口
 
+### 3.1 清理当前Session
+```
+POST /api/session/logout
+```
+**响应示例:**
+```json
+{
+  "success": true,
+  "message": "Session已清理",
+  "sessionId": "ABC123..."
+}
+```
+
+### 3.2 清理Redis中的所有Session
+```
+POST /api/session/redis/clear/sessions
+```
+**说明:** 用于解决"authorization_request_not_found"错误
+**响应示例:**
+```json
+{
+  "success": true,
+  "message": "Redis Session数据清理完成",
+  "clearedCount": 15,
+  "timestamp": 1642857600000
+}
+```
+
+### 3.3 清理OAuth2缓存
+```
+POST /api/session/redis/clear/oauth2
+```
+**响应示例:**
+```json
+{
+  "success": true,
+  "message": "OAuth2缓存清理完成",
+  "clearedCount": 8,
+  "timestamp": 1642857600000
+}
+```
+
+### 3.4 获取Redis缓存统计
+```
+GET /api/session/redis/stats
+```
+**响应示例:**
+```json
+{
+  "success": true,
+  "patternStats": {
+    "spring:session:*": 5,
+    "oauth2:*": 3,
+    "auth:*": 2,
+    "user:*": 1,
+    "google:*": 0
+  },
+  "totalKeys": 11,
+  "categorizedKeys": 11,
+  "otherKeys": 0,
+  "timestamp": 1642857600000
+}
+```
+
+## 4. 调试和网络测试接口
+
+### 4.1 网络连接测试
+```
+GET /api/auth/network/test
+```
+**说明:** 测试与Google API的网络连接
+**响应示例:**
+```json
+{
+  "success": true,
+  "dns": {
+    "oauth2.googleapis.com": "142.250.191.106",
+    "accounts.google.com": "142.250.191.84",
+    "status": "success"
+  },
+  "googleApi": {
+    "oauth2.googleapis.com": {
+      "responseCode": 405,
+      "responseTime": "234ms",
+      "status": "success"
+    }
+  },
+  "system": {
+    "httpProxy": "not set",
+    "httpsProxy": "not set",
+    "activeNetworkInterfaces": ["eth0 (以太网)"]
+  },
+  "timestamp": 1642857600000
+}
+```
+
+### 4.2 OAuth2配置调试
+```
+GET /api/auth/oauth2/debug
+```
+**响应示例:**
+```json
+{
+  "success": true,
+  "oauth2Config": {
+    "clientId": "13566225304-0dol5ppkktl1vpehsenii5cqp2avuktt.apps.googleusercontent.com",
+    "redirectUri": "http://localhost:8080/api/auth/google/callback",
+    "scope": "profile,email",
+    "authorizationUri": "https://accounts.google.com/o/oauth2/auth",
+    "tokenUri": "https://oauth2.googleapis.com/token"
+  },
+  "manualAuthUrl": "https://accounts.google.com/o/oauth2/auth?...",
+  "instructions": {
+    "step1": "访问上面的manualAuthUrl进行授权",
+    "step2": "授权后会重定向到callback，从URL中获取code参数",
+    "step3": "使用code调用/api/auth/manual-token-exchange端点来手动交换token"
+  }
+}
+```
+
+## 5. 前端调用示例
+
+### 5.1 JavaScript/React 登录示例
 ```javascript
-class GoogleAuthService {
-  constructor() {
-    this.baseURL = 'http://localhost:8080';
-  }
-
-  // 方法1: 直接跳转到Google登录
-  async redirectToGoogleLogin() {
-    window.location.href = `${this.baseURL}/api/google/login`;
-  }
-
-  // 方法2: 获取登录URL后自定义处理
-  async getGoogleLoginUrl() {
-    try {
-      const response = await fetch(`${this.baseURL}/api/google/login-url`);
-      const data = await response.json();
-      
-      if (data.success) {
-        // 可以在新窗口打开或当前页面跳转
-        window.location.href = `${this.baseURL}${data.loginUrl}`;
-        // 或者在新窗口打开: window.open(`${this.baseURL}${data.loginUrl}`, '_blank');
-      }
-    } catch (error) {
-      console.error('获取Google登录URL失败:', error);
-    }
-  }
-
-  // 检查登录状态
-  async checkLoginStatus() {
-    try {
-      const response = await fetch(`${this.baseURL}/api/google/status`, {
-        credentials: 'include' // 包含cookies
-      });
-      const data = await response.json();
-      return data.isLoggedIn;
-    } catch (error) {
-      console.error('检查登录状态失败:', error);
-      return false;
-    }
-  }
-
-  // 获取用户信息
-  async getUserInfo() {
-    try {
-      const response = await fetch(`${this.baseURL}/api/google/user-info`, {
-        credentials: 'include'
-      });
-      const data = await response.json();
-      
-      if (data.success) {
-        return data.user;
-      } else {
-        throw new Error(data.message);
-      }
-    } catch (error) {
-      console.error('获取用户信息失败:', error);
-      return null;
-    }
-  }
-
-  // 登出
-  async logout() {
-    try {
-      const response = await fetch(`${this.baseURL}/api/google/logout`, {
-        method: 'POST',
-        credentials: 'include'
-      });
-      const data = await response.json();
-      
-      if (data.success) {
-        // 清除本地存储的用户信息
-        localStorage.removeItem('user');
-        // 刷新页面或重定向到登录页
-        window.location.reload();
-      }
-    } catch (error) {
-      console.error('登出失败:', error);
-    }
-  }
-}
-
-// 使用示例
-const authService = new GoogleAuthService();
-
-// 登录按钮点击事件
-document.getElementById('googleLoginBtn').addEventListener('click', () => {
-  authService.redirectToGoogleLogin();
-});
-
-// 页面加载时检查登录状态
-window.addEventListener('load', async () => {
-  const isLoggedIn = await authService.checkLoginStatus();
-  
-  if (isLoggedIn) {
-    const user = await authService.getUserInfo();
-    if (user) {
-      // 显示用户信息
-      console.log('当前用户:', user);
-      // 更新UI显示用户已登录状态
-    }
-  } else {
-    // 显示登录按钮
-    console.log('用户未登录');
-  }
-});
-```
-
-### React 组件示例
-
-```jsx
-import React, { useState, useEffect } from 'react';
-
-const GoogleLogin = () => {
-  const [user, setUser] = useState(null);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-
-  const handleGoogleLogin = () => {
-    // 直接跳转到Google登录
-    window.location.href = 'http://localhost:8080/api/google/login';
-  };
-
-  const handleLogout = async () => {
-    try {
-      const response = await fetch('http://localhost:8080/api/google/logout', {
-        method: 'POST',
-        credentials: 'include'
-      });
-      const data = await response.json();
-      
-      if (data.success) {
-        setUser(null);
-        setIsLoggedIn(false);
-      }
-    } catch (error) {
-      console.error('登出失败:', error);
-    }
-  };
-
-  const checkLoginStatus = async () => {
-    try {
-      const response = await fetch('http://localhost:8080/api/google/status', {
-        credentials: 'include'
-      });
-      const data = await response.json();
-      
-      if (data.isLoggedIn) {
-        setIsLoggedIn(true);
-        // 获取详细用户信息
-        const userResponse = await fetch('http://localhost:8080/api/google/user-info', {
-          credentials: 'include'
-        });
-        const userData = await userResponse.json();
-        if (userData.success) {
-          setUser(userData.user);
-        }
-      }
-    } catch (error) {
-      console.error('检查登录状态失败:', error);
-    }
-  };
-
-  useEffect(() => {
-    checkLoginStatus();
-  }, []);
-
-  return (
-    <div>
-      {isLoggedIn ? (
-        <div>
-          <h3>欢迎, {user?.name}!</h3>
-          <img src={user?.picture} alt="头像" width="50" height="50" />
-          <p>邮箱: {user?.email}</p>
-          <button onClick={handleLogout}>登出</button>
-        </div>
-      ) : (
-        <div>
-          <h3>请登录</h3>
-          <button onClick={handleGoogleLogin}>
-            使用Google账户登录
-          </button>
-        </div>
-      )}
-    </div>
-  );
+// 开始登录
+const handleLogin = () => {
+  window.location.href = 'http://localhost:8080/oauth2/authorization/google';
 };
 
-export default GoogleLogin;
-```
-
-### Vue.js 组件示例
-
-```vue
-<template>
-  <div>
-    <div v-if="isLoggedIn">
-      <h3>欢迎, {{ user.name }}!</h3>
-      <img :src="user.picture" alt="头像" width="50" height="50" />
-      <p>邮箱: {{ user.email }}</p>
-      <button @click="logout">登出</button>
-    </div>
-    <div v-else>
-      <h3>请登录</h3>
-      <button @click="loginWithGoogle">使用Google账户登录</button>
-    </div>
-  </div>
-</template>
-
-<script>
-export default {
-  name: 'GoogleLogin',
-  data() {
-    return {
-      user: null,
-      isLoggedIn: false
-    }
-  },
-  async mounted() {
-    await this.checkLoginStatus();
-  },
-  methods: {
-    loginWithGoogle() {
-      window.location.href = 'http://localhost:8080/api/google/login';
-    },
-    
-    async logout() {
-      try {
-        const response = await fetch('http://localhost:8080/api/google/logout', {
-          method: 'POST',
-          credentials: 'include'
-        });
-        const data = await response.json();
-        
-        if (data.success) {
-          this.user = null;
-          this.isLoggedIn = false;
-        }
-      } catch (error) {
-        console.error('登出失败:', error);
-      }
-    },
-    
-    async checkLoginStatus() {
-      try {
-        const response = await fetch('http://localhost:8080/api/google/status', {
-          credentials: 'include'
-        });
-        const data = await response.json();
-        
-        if (data.isLoggedIn) {
-          this.isLoggedIn = true;
-          const userResponse = await fetch('http://localhost:8080/api/google/user-info', {
-            credentials: 'include'
-          });
-          const userData = await userResponse.json();
-          if (userData.success) {
-            this.user = userData.user;
-          }
-        }
-      } catch (error) {
-        console.error('检查登录状态失败:', error);
-      }
-    }
+// 检查登录状态
+const checkAuthStatus = async () => {
+  try {
+    const response = await fetch('http://localhost:8080/api/auth/status', {
+      credentials: 'include' // 重要：包含Session Cookie
+    });
+    const data = await response.json();
+    return data.authenticated;
+  } catch (error) {
+    console.error('检查登录状态失败:', error);
+    return false;
   }
-}
-</script>
+};
+
+// 登出
+const handleLogout = async () => {
+  try {
+    const response = await fetch('http://localhost:8080/api/auth/logout', {
+      method: 'POST',
+      credentials: 'include' // 重要：包含Session Cookie
+    });
+    const data = await response.json();
+    if (data.success) {
+      console.log('登出成功');
+      // 重定向到登录页面
+      window.location.href = '/login';
+    }
+  } catch (error) {
+    console.error('登出失败:', error);
+  }
+};
 ```
 
-## 重要配置说明
-
-### 1. Google OAuth2 配置
-确保在Google Cloud Console中配置了正确的重定向URI：
+### 5.2 解决Session问题的示例
+```javascript
+// 当遇到 "authorization_request_not_found" 错误时
+const clearSessionAndRetry = async () => {
+  try {
+    // 清理Redis Session
+    await fetch('http://localhost:8080/api/session/redis/clear/sessions', {
+      method: 'POST'
+    });
+    
+    // 强制登出
+    await fetch('http://localhost:8080/api/auth/force-logout', {
+      method: 'POST'
+    });
+    
+    // 重新开始登录流程
+    setTimeout(() => {
+      window.location.href = 'http://localhost:8080/oauth2/authorization/google';
+    }, 1000);
+    
+  } catch (error) {
+    console.error('清理Session失败:', error);
+  }
+};
 ```
-http://localhost:8080/api/auth/google/callback
-```
 
-### 2. CORS 配置
-如果前端和后端在不同端口，确保处理跨域问题。后端已添加 `@CrossOrigin(origins = "*")`。
+## 6. 常见错误处理
 
-### 3. Cookie/Session 配置
-前端请求时需要包含 `credentials: 'include'` 以传递session cookies。
+### 6.1 authorization_request_not_found
+**原因:** Session在OAuth2流程中丢失
+**解决方案:** 
+1. 调用 `POST /api/session/redis/clear/sessions` 清理Session
+2. 调用 `POST /api/auth/force-logout` 强制登出
+3. 重新开始登录流程
 
-### 4. 错误处理
-所有API都返回统一格式的错误响应：
-```json
-{
-  "success": false,
-  "message": "错误描述"
-}
-```
+### 6.2 Connection timed out
+**原因:** 网络连接问题，可能需要VPN
+**解决方案:**
+1. 调用 `GET /api/auth/network/test` 测试网络
+2. 检查VPN连接
+3. 使用手动token交换接口
 
-## 部署注意事项
+### 6.3 invalid_id_token
+**原因:** JWT token验证失败
+**解决方案:**
+1. 调用 `POST /api/session/redis/clear/oauth2` 清理OAuth2缓存
+2. 重新登录
 
-1. **生产环境配置**: 修改 `application.properties` 中的 `redirect-uri` 为生产环境域名
-2. **HTTPS**: 生产环境建议使用HTTPS
-3. **跨域配置**: 根据实际前端域名配置CORS
-4. **安全性**: 可以集成JWT token进行更安全的认证
+## 7. 重要注意事项
 
-这套API提供了完整的Google OAuth2登录流程，前端可以根据需要选择合适的调用方式。
+1. **Cookie和Session:** 所有需要认证的接口都必须在请求中包含 `credentials: 'include'`
+2. **CORS配置:** 确保前端域名在CORS白名单中
+3. **HTTPS:** 生产环境必须使用HTTPS
+4. **错误重试:** 遇到Session相关错误时，优先尝试清理缓存再重新登录
+5. **网络环境:** 如果在中国大陆，可能需要VPN访问Google API
+
+## 8. 测试流程
+
+1. 访问 `GET /api/auth/network/test` 确认网络连接
+2. 访问 `GET /api/session/redis/stats` 查看缓存状态
+3. 调用 `POST /api/session/redis/clear/sessions` 清理旧Session
+4. 开始登录流程 `GET /oauth2/authorization/google`
+5. 登录成功后测试 `GET /api/auth/user`
+6. 测试登出 `POST /api/auth/logout`
