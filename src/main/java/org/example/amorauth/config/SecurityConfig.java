@@ -1,7 +1,10 @@
 package org.example.amorauth.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.example.amorauth.common.constant.HttpStatus;
+import org.example.amorauth.common.domain.R;
 import org.example.amorauth.entity.User;
 import org.example.amorauth.service.LoginLogService;
 import org.example.amorauth.service.UserService;
@@ -14,7 +17,10 @@ import org.springframework.security.oauth2.client.endpoint.OAuth2AuthorizationCo
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest;
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserService;
 import org.springframework.security.oauth2.core.user.OAuth2User;
+import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 
 @Configuration
 @EnableWebSecurity
@@ -22,17 +28,30 @@ import org.springframework.security.web.SecurityFilterChain;
 @Slf4j
 public class SecurityConfig {
 
+
     private final UserService userService;
     private final LoginLogService loginLogService;
     private final OAuth2AccessTokenResponseClient<OAuth2AuthorizationCodeGrantRequest> authorizationCodeTokenResponseClient;
     private final OAuth2UserService<OAuth2UserRequest, OAuth2User> oauth2UserService;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
                 .authorizeHttpRequests(authz -> authz
-                        .requestMatchers("/", "/api/**").permitAll()
-                        .anyRequest().authenticated()
+                        // 开放登录与回调等
+                        .requestMatchers("/", "/api/auth/login", "/oauth2/**", "/login/oauth2/**",
+                                "/api/auth/google/callback", "/error").permitAll()
+                        // 管理接口强制认证
+                        .requestMatchers("/api/admin/**").authenticated()
+                        // 其他接口按需放开或限制
+                        .anyRequest().permitAll()
+                )
+                // API 统一返回 JSON，不做重定向
+                .exceptionHandling(ex -> ex
+                        .defaultAuthenticationEntryPointFor(apiAuthenticationEntryPoint(),
+                                new AntPathRequestMatcher("/api/**"))
+                        .accessDeniedHandler(apiAccessDeniedHandler())
                 )
             .oauth2Login(oauth2 -> oauth2
                 .redirectionEndpoint(redirection -> redirection
@@ -81,5 +100,23 @@ public class SecurityConfig {
             );
 
         return http.build();
+    }
+
+    private AuthenticationEntryPoint apiAuthenticationEntryPoint() {
+        return (request, response, authException) -> {
+            response.setStatus(401);
+            response.setContentType("application/json;charset=UTF-8");
+            var body = R.fail(HttpStatus.UNAUTHORIZED, "未授权访问");
+            objectMapper.writeValue(response.getWriter(), body);
+        };
+    }
+
+    private AccessDeniedHandler apiAccessDeniedHandler() {
+        return (request, response, accessDeniedException) -> {
+            response.setStatus(403);
+            response.setContentType("application/json;charset=UTF-8");
+            var body = R.fail(HttpStatus.FORBIDDEN, "无权限访问");
+            objectMapper.writeValue(response.getWriter(), body);
+        };
     }
 }

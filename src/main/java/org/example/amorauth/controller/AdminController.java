@@ -23,10 +23,6 @@ public class AdminController {
 
     @GetMapping("/stats")
     public ResponseEntity<Map<String, Object>> getSystemStats(@AuthenticationPrincipal OAuth2User oauth2User) {
-        if (oauth2User == null) {
-            return ResponseEntity.status(401).build();
-        }
-
         String googleId = oauth2User.getAttribute("sub");
         var user = userService.findByGoogleId(googleId);
 
@@ -41,10 +37,6 @@ public class AdminController {
     public ResponseEntity<List<LoginLogDto>> getLoginHistory(
             @AuthenticationPrincipal OAuth2User oauth2User,
             @RequestParam(defaultValue = "10") Integer limit) {
-
-        if (oauth2User == null) {
-            return ResponseEntity.status(401).build();
-        }
 
         String googleId = oauth2User.getAttribute("sub");
         var user = userService.findByGoogleId(googleId);
