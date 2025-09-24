@@ -152,171 +152,81 @@ INFO : Application ready on port 8080
 
 ## 🔐 Google登录调用流程
 
-### 完整的OAuth2认证流程
 
-#### 1. 用户发起登录请求
+## 1. 登录流程总览
 
-```
-用户访问: http://localhost:8080
-↓
-系统检测未登录状态
-↓
-重定向到登录页面: http://localhost:8080/login
-```
+1. 用户访问系统首页（如 http://localhost:8080/login），系统检测未登录。
+2. 用户点击“使用 Google 登录”按钮，前端跳转到 `/api/auth/login`。
+3. 后端 `/api/auth/login` 接口重定向到 Google OAuth2 授权页面。
+4. 用户在 Google 授权页面同意授权后，Google 回调到 `/api/auth/google/callback`。
+5. 后端自动处理授权码，获取用户信息，创建或更新用户，并完成登录。
+6. 登录成功后，后端返回 JSON 响应，前端可根据 `redirectUrl` 跳转到仪表盘等页面。
 
-#### 2. 选择Google登录
+## 2. 关键接口说明
 
-```
-用户点击 "使用Google登录" 按钮
-↓
-系统构造Google OAuth2授权URL
-↓
-重定向到Google授权服务器
-```
+- `GET /api/auth/login`：跳转到 Google OAuth2 登录页面
+- `GET /api/auth/google/callback`：Google 登录回调，自动处理授权码和用户信息
+- `GET /api/auth/user`：获取当前登录用户信息
+- `POST /api/auth/logout`：登出，清理会话
 
-**授权URL示例：**
-```
-https://accounts.google.com/oauth/authorize?
-response_type=code&
-client_id=your_client_id&
-scope=openid%20profile%20email&
-redirect_uri=http://localhost:8080/login/oauth2/code/google&
-state=random_state_value
-```
+## 3. 主要代码调用链
 
-#### 3. Google授权处理
+1. **SecurityConfig.java**
+    - 配置 OAuth2 登录端点和回调路径
+    - 放行 `/api/auth/login` 和 `/api/auth/google/callback` 等接口
+2. **AuthController.java**
+    - `/api/auth/login`：重定向到 Google 授权页面
+    - `/api/auth/google/callback`：处理 Google 回调，获取用户信息，创建/更新用户
+3. **UserService.java**
+    - `createOrUpdateUser`：同步 Google 用户信息到数据库
+4. **LoginLogService.java**
+    - 记录用户登录日志
 
-```
-用户在Google页面确认授权
-↓
-Google验证用户身份
-↓
-Google重定向回应用回调地址，携带授权码
-```
+## 4. API 调用示例
 
-**回调URL示例：**
-```
-http://localhost:8080/login/oauth2/code/google?
-code=authorization_code&
-state=random_state_value
-```
-
-#### 4. 应用处理授权码
-
-```
-Spring Security OAuth2拦截回调请求
-↓
-使用授权码向Google请求访问令牌
-↓
-获取用户信息（姓名、邮箱、头像等）
-```
-
-**令牌请求：**
+### 1. 跳转到 Google 登录
 ```http
-POST https://oauth2.googleapis.com/token
-Content-Type: application/x-www-form-urlencoded
-
-client_id=your_client_id&
-client_secret=your_client_secret&
-code=authorization_code&
-grant_type=authorization_code&
-redirect_uri=http://localhost:8080/login/oauth2/code/google
+GET http://localhost:8080/api/auth/login
 ```
 
-#### 5. 用户信息处理
+### 2. 用户授权后，Google 回调
+- 回调地址：`http://localhost:8080/api/auth/google/callback`
+- 后端自动处理，无需手动调用
 
-```
-调用UserService.processOAuth2Login()
-↓
-检查用户是否已存在数据库
-↓
-如果是新用户，创建用户记录
-↓
-更新用户最后登录时间
-↓
-记录登录日志到数据库和Redis
-↓
-创建Spring Security认证对象
+### 3. 获取当前登录用户信息
+```http
+GET http://localhost:8080/api/auth/user
+Cookie: JSESSIONID=your_session_id
 ```
 
-#### 6. 登录成功处理
-
-```
-设置用户认证状态
-↓
-重定向到仪表板页面
-↓
-用户登录完成
+### 4. 登出
+```http
+POST http://localhost:8080/api/auth/logout
+Cookie: JSESSIONID=your_session_id
 ```
 
-### 关键代码调用链
-
-1. **SecurityConfig.java** - 配置OAuth2登录端点
-2. **AuthController.java** - 处理登录成功后的重定向
-3. **UserService.java** - 处理用户信息同步
-4. **LoginLogService.java** - 记录登录日志
-
-### API调用示例
-
-#### 手动调用Google登录流程
-
-```bash
-# 1. 获取授权URL
-curl -X GET "http://localhost:8080/oauth2/authorization/google"
-
-# 2. 用户完成授权后，系统会自动处理回调
-
-# 3. 检查登录状态
-curl -X GET "http://localhost:8080/api/user/profile" \
-  -H "Cookie: JSESSIONID=your_session_id"
-```
-
-### 错误处理
-
-#### 常见错误及解决方案
+## 5. 错误处理与常见问题
 
 1. **client_id无效**
-   ```
-   错误：invalid_client
-   解决：检查Google Cloud Console中的客户端ID配置
-   ```
+    - 错误：`invalid_client`
+    - 解决：检查 Google Cloud Console 中的客户端 ID 配置
 
 2. **重定向URI不匹配**
-   ```
-   错误：redirect_uri_mismatch
-   解决：确保回调URL与Google Console中配置的完全一致
-   ```
+    - 错误：`redirect_uri_mismatch`
+    - 解决：确保回调 URL 与 Google Console 中配置的完全一致
 
-3. **访问令牌过期**
-   ```
-   错误：invalid_token
-   解决：系统会自动处理令牌刷新
-   ```
+3. **authorization_request_not_found**
+    - 解决：检查 session 是否丢失，前端请求需携带 Cookie（`credentials: 'include'`）
 
-### 调试技巧
+4. **访问令牌过期**
+    - 错误：`invalid_token`
+    - 解决：系统会自动处理令牌刷新，无需手动干预
 
-#### 启用详细日志
-
-在 `application.properties` 中添加：
-
-```properties
-# OAuth2调试日志
-logging.level.org.springframework.security.oauth2=DEBUG
-logging.level.org.springframework.web.client.RestTemplate=DEBUG
-
-# 请求响应日志
-logging.level.org.apache.http=DEBUG
-```
-
-#### 查看用户认证信息
-
-```java
-// 在Controller中获取当前用户信息
-@GetMapping("/debug/user")
-public ResponseEntity<?> getCurrentUser(Authentication authentication) {
-    return ResponseEntity.ok(authentication.getPrincipal());
-}
-```
+## 6. 其他说明
+- 所有 Google 登录流程均由后端自动处理，前端只需跳转到 `/api/auth/login`。
+- 回调和用户信息同步逻辑在后端完成，无需前端传递授权码。
+- 用户信息和登录日志自动写入数据库。
+- 登出接口无需参数，直接 POST 即可。
 
 ## 📁 项目结构
 
@@ -332,7 +242,7 @@ amor-auth/
 │   │   │   │   └── RedisConfig.java              # Redis配置
 │   │   │   ├── controller/
 │   │   │   │   ├── AuthController.java           # 认证控制器
-│   │   │   │   ├── WelcomeController.java        # 欢迎页控制器
+│   │   │   │   ├── SessionController.java        # Session控制器
 │   │   │   │   └── AdminController.java          # 管理员控制器
 │   │   │   ├── service/
 │   │   │   │   ├── UserService.java              # 用户服务
@@ -340,13 +250,11 @@ amor-auth/
 │   │   │   ├── entity/
 │   │   │   │   ├── User.java                     # 用户实体
 │   │   │   │   └── LoginLog.java                 # 登录日志实体
-│   │   │   └── mapper/
-│   │   │       ├── UserMapper.java               # 用户数据访问
-│   │   │       └── LoginLogMapper.java           # 日志数据访问
 │   │   └── resources/
 │   │       ├── application.properties             # 应用配置
-│   │       ├── templates/
-│   │       │   └── login.html                    # 登录页面
+│   │       └── mapper/
+│   │           └── LoginLogMapper.xml                # 日志数据访问
+│   │           └── UserMapper.xml                    # 用户数据访问
 │   │       └── db/
 │   │           └── init.sql                      # 数据库初始化脚本
 └── pom.xml                                       # Maven依赖配置
