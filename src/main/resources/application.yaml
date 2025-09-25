@@ -1,0 +1,98 @@
+spring:
+  application:
+    name: amor-auth
+  datasource:
+    url: jdbc:mysql://localhost:3306/amor_auth?allowPublicKeyRetrieval=true&useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
+    username: root
+    password: 123456
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      database: 0
+      timeout: 5000
+      lettuce:
+        pool:
+          max-active: 8
+          max-wait: -1
+          max-idle: 8
+          min-idle: 0
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: 13566225304-0dol5ppkktl1vpehsenii5cqp2avuktt.apps.googleusercontent.com
+            client-secret: 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
+            scope: profile,email
+            redirect-uri: http://192.168.100.39.nip.io:8080/api/auth/google/callback
+            # AWS??????
+            # redirect-uri: http://18.166.177.4.nip.io:8080/api/auth/google/callback
+          apple:
+            client-id: ???AppleClientId
+            client-secret: ???AppleClientSecret
+            scope: name,email
+            redirect-uri: http://localhost:8080/api/auth/apple/callback
+            authorization-grant-type: authorization_code
+            client-authentication-method: client_secret_post
+        provider:
+          google:
+            authorization-uri: https://accounts.google.com/o/oauth2/auth
+            token-uri: https://oauth2.googleapis.com/token
+            user-info-uri: https://openidconnect.googleapis.com/v1/userinfo
+            user-name-attribute: sub
+            # JWT???URI?????
+            jwk-set-uri: ""
+          apple:
+            authorization-uri: https://appleid.apple.com/auth/authorize
+            token-uri: https://appleid.apple.com/auth/token
+            user-info-uri: https://appleid.apple.com/auth/userinfo
+            jwk-set-uri: https://appleid.apple.com/auth/keys
+            user-name-attribute: sub
+        http-client:
+          # HTTP???????????
+          connect-timeout: 30000
+          read-timeout: 30000
+          write-timeout: 30000
+
+server:
+  port: 8080
+  servlet:
+    session:
+      timeout: 60s
+  # ????????
+  max-http-request-header-size: 8192
+
+# OAuth2 ????
+# ???????????????(AWS)???false
+oauth2:
+  proxy:
+    enabled: true
+    host: 127.0.0.1
+    port: 10808
+
+# MyBatis??
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: org.example.amorauth.entity
+  configuration:
+    map-underscore-to-camel-case: true
+
+# ????
+logging:
+  level:
+    org.example.amorauth: DEBUG
+    org.springframework.security: DEBUG
+    # ??OAuth2????
+    org.springframework.security.oauth2: DEBUG
+    org.springframework.security.oauth2.client: TRACE
+    org.springframework.web.client: DEBUG
+    org.springframework.web.client.RestTemplate: DEBUG
+    org.springframework.web: DEBUG
+    org.apache.http: DEBUG
+    org.springframework.http: DEBUG
+    org.springframework.boot.web.client: DEBUG
+    # ??HTTP????
+    httpclient.wire: DEBUG
+    org.apache.http.wire: DEBUG
