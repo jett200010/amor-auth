@@ -1,6 +1,7 @@
 package org.example.amorauth.config;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.ClientHttpRequestFactory;
@@ -29,6 +30,15 @@ import java.util.List;
 @Slf4j
 public class OAuth2HttpClientConfig {
 
+    @Value("${oauth2.proxy.enabled:false}")
+    private boolean proxyEnabled;
+
+    @Value("${oauth2.proxy.host:127.0.0.1}")
+    private String proxyHost;
+
+    @Value("${oauth2.proxy.port:10808}")
+    private int proxyPort;
+
     @Bean
     public OAuth2AccessTokenResponseClient<OAuth2AuthorizationCodeGrantRequest> authorizationCodeTokenResponseClient() {
         DefaultAuthorizationCodeTokenResponseClient tokenResponseClient = new DefaultAuthorizationCodeTokenResponseClient();
@@ -37,7 +47,11 @@ public class OAuth2HttpClientConfig {
         RestTemplate restTemplate = oauth2RestTemplate();
         tokenResponseClient.setRestOperations(restTemplate);
 
-        log.info("Custom OAuth2 token response client configured with proxy 127.0.0.1:10808");
+        if (proxyEnabled) {
+            log.info("Custom OAuth2 token response client configured with proxy {}:{}", proxyHost, proxyPort);
+        } else {
+            log.info("Custom OAuth2 token response client configured without proxy (production mode)");
+        }
         return tokenResponseClient;
     }
 
@@ -79,9 +93,14 @@ public class OAuth2HttpClientConfig {
         // 配置代理
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
 
-        // 配置VPN代理
-        Proxy proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress("127.0.0.1", 10808));
-        factory.setProxy(proxy);
+        // 根据环境配置代理
+        if (proxyEnabled) {
+            Proxy proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress(proxyHost, proxyPort));
+            factory.setProxy(proxy);
+            log.info("OAuth2 RestTemplate configured with proxy {}:{}", proxyHost, proxyPort);
+        } else {
+            log.info("OAuth2 RestTemplate configured without proxy (production mode)");
+        }
 
         // 设置超时
         factory.setConnectTimeout(60000); // 60秒
@@ -100,7 +119,6 @@ public class OAuth2HttpClientConfig {
         // 设置错误处理器
         restTemplate.setErrorHandler(new OAuth2ErrorResponseErrorHandler());
 
-        log.info("OAuth2 RestTemplate configured with proxy 127.0.0.1:10808");
         return restTemplate;
     }
 
@@ -111,9 +129,14 @@ public class OAuth2HttpClientConfig {
         // 配置代理
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
 
-        // 配置VPN代理
-        Proxy proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress("127.0.0.1", 10808));
-        factory.setProxy(proxy);
+        // 根据环境配置代理 - 生产环境(AWS)不使用代理
+        if (proxyEnabled) {
+            Proxy proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress(proxyHost, proxyPort));
+            factory.setProxy(proxy);
+            log.info("OAuth2 UserInfo RestTemplate configured with proxy {}:{}", proxyHost, proxyPort);
+        } else {
+            log.info("OAuth2 UserInfo RestTemplate configured without proxy (production mode)");
+        }
 
         // 设置超时
         factory.setConnectTimeout(60000); // 60秒
@@ -121,7 +144,6 @@ public class OAuth2HttpClientConfig {
 
         restTemplate.setRequestFactory(factory);
 
-        log.info("OAuth2 UserInfo RestTemplate configured with proxy 127.0.0.1:10808");
         return restTemplate;
     }
 }
